@@ -118,7 +118,7 @@ contract Purchase {
         state = State.Released;
 
         // Actions.
-        seller.transfer(2 * value);
+        seller.transfer(value);
     }
 
     // Resets the contract and reclaims the ether.
