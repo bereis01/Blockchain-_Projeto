@@ -110,6 +110,9 @@ contract Purchase {
         // State Change.
         emit ContractReset();
         state = State.Created;
+        buyer = payable(0);
+        value = uint256(0);
+        lockTimeStamp = uint256(0);
 
         // Actions.
         seller.transfer(address(this).balance);
