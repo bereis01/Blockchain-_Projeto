@@ -12,17 +12,10 @@ contract Purchase {
         Created,
         Ready,
         Locked,
-        Released,
         Finished,
         Inactive
     }
-
-    State public state; // The state variable has a default value of the first member, `State.created`
-
-    modifier condition(bool condition_) {
-        require(condition_);
-        _;
-    }
+    State public state; // The state variable has a default value of the first member, `State.created`.
 
     error OnlyBuyer(); // Only the buyer can call this function.
     error OnlySeller(); // Only the seller can call this function.
@@ -44,11 +37,11 @@ contract Purchase {
         _;
     }
 
-    event Aborted();
+    event ContractReady();
     event PurchaseConfirmed();
     event ItemReceived();
-    event SellerReset();
-    event SellerReleased();
+    event ContractReset();
+    event ContractInactivated();
 
     // Saves the address of the seller.
     constructor() payable {
@@ -56,9 +49,6 @@ contract Purchase {
     }
 
     // Establishes the cost of the product being sold.
-    // Ensure that `msg.value` is an even number.
-    // Division will truncate if it is an odd number.
-    // Check via multiplication that it wasn't an odd number.
     function prepareContract()
         external
         payable
@@ -70,19 +60,15 @@ contract Purchase {
         if ((2 * value) != msg.value) revert ValueNotEven();
 
         // State Change.
+        emit ContractReady();
         state = State.Ready;
     }
 
     // Confirm the purchase as buyer.
-    // Transaction has to include `2 * value` ether.
-    // The ether will be locked until confirmReceived
-    // is called.
-    function confirmPurchase()
-        external
-        payable
-        inState(State.Created)
-        condition(msg.value == (2 * value))
-    {
+    function confirmPurchase() external payable inState(State.Ready) {
+        // Conditions
+        require(msg.value == (2 * value));
+
         // State Change.
         emit PurchaseConfirmed();
         buyer = payable(msg.sender);
@@ -90,13 +76,8 @@ contract Purchase {
         state = State.Locked;
     }
 
-    // Confirm that you (the buyer) received the item.
-    // This will release the locked ether.
-    function confirmReceived() external onlyBuyer {
-        // Conditions.
-        if (!((state == State.Locked) || (state == State.Released)))
-            revert InvalidState();
-
+    // Confirm that the buyer received the item.
+    function confirmReceived() external onlyBuyer inState(State.Locked) {
         // State Change.
         emit ItemReceived();
         state = State.Finished;
@@ -105,33 +86,29 @@ contract Purchase {
         buyer.transfer(value);
     }
 
-    // Releases escrow if customer does not
-    // confirm goods' receipt.
-    function releaseEscrow()
-        external
-        onlySeller
-        inState(State.Locked)
-        condition(block.timestamp > lockTimeStamp)
-    {
+    // Releases escrow if customer does not confirm goods' receipt.
+    // Makes the contract inactive.
+    function abortContract() external onlySeller inState(State.Locked) {
+        // Conditions.
+        require(block.timestamp > lockTimeStamp);
+
         // State Change.
-        emit SellerReleased();
-        state = State.Released;
+        emit ContractInactivated();
+        state = State.Inactive;
 
         // Actions.
+        buyer.transfer(value);
         seller.transfer(value);
     }
 
     // Resets the contract and reclaims the ether.
-    // Can only be called by the seller before
-    // the contract is locked or after it has
-    // been unlocked.
     function resetContract() external onlySeller {
         // Conditions.
         if (!((state == State.Ready) || (state == State.Finished)))
             revert InvalidState();
 
         // State Change.
-        emit SellerReset();
+        emit ContractReset();
         state = State.Created;
 
         // Actions.
@@ -139,9 +116,9 @@ contract Purchase {
     }
 
     // Makes the contract inactive.
-    function abortContract() external onlySeller inState(State.Created) {
+    function inactivateContract() external onlySeller inState(State.Created) {
         // State Change.
-        emit Aborted();
+        emit ContractInactivated();
         state = State.Inactive;
     }
 }
