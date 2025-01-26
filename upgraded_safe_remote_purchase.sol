@@ -127,11 +127,8 @@ contract Purchase {
     // been unlocked.
     function resetContract() external onlySeller {
         // Conditions.
-        if (
-            !((state == State.Created) ||
-                (state == State.Ready) ||
-                (state == State.Finished))
-        ) revert InvalidState();
+        if (!((state == State.Ready) || (state == State.Finished)))
+            revert InvalidState();
 
         // State Change.
         emit SellerReset();
